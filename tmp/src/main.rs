@@ -114,7 +114,7 @@ fn main() -> Result<(), Error> {
             rewards_address: rego.metadata.rewards_addr.clone(),
             stake_public_key: rego.metadata.stake_vkey.clone(),
             voting_power: voting_power.clone(),
-            voting_purpose: rego.metadata.purpose,
+            voting_purpose: rego.metadata.purpose.unwrap_or(0),
         };
         output.push(entry);
     }

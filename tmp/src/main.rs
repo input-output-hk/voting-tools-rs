@@ -74,32 +74,6 @@ struct Output {
     voting_purpose: u64,
 }
 
-// fn main() -> Result<(), Error> {
-//     // Connect to db-sync database
-//     let mut client = Client::connect(
-//         "postgresql://cexplorer@cexplorer?host=/var/run/postgresql",
-//         NoTls,
-//     )?;
-
-//     // TODO parse slot number from command line
-//     let regos: Vec<Rego> = query_vote_registrations(&mut client, None)?;
-
-//     // let regos_latest: Vec<Rego> = filter_latest_registrations(regos);
-
-//     let only_regos : Vec<Rego> = regos
-//         .into_iter()
-//         .filter(|r| r.metadata.stake_vkey == "0x000d28a9abc7b2f384bd39f6b7d49b631caec75df63f33066fe23f83824e85a7")
-//         .collect();
-//     let only_rego = &only_regos[2];
-//     let only_rego_meta = serde_json::to_string_pretty(&only_rego.metadata).unwrap();
-//     let only_rego_sig = serde_json::to_string_pretty(&only_rego.signature).unwrap();
-//     // println!("{only_rego_meta}");
-//     // println!("{only_rego_sig}");
-//     mk_meta(only_rego);
-
-//     Ok(())
-// }
-
 fn main() -> Result<(), Error> {
     // Connect to db-sync database
     // TODO Retrieve DB parameters from command-line

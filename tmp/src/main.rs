@@ -58,6 +58,7 @@ struct RegoSignature {
     signature: String,
 }
 
+#[derive(Serialize, Deserialize)]
 #[derive(Clone)]
 struct Rego {
     tx_id: i64,
@@ -105,11 +106,16 @@ fn main() -> Result<(), Error> {
     // cost to make subsequent queries more efficient.
     mk_stake_snapshot_table(&mut client, None);
     for rego in regos_latest {
-        // TODO if it doesn't have a valid stake address, it shouldn't be
-        // considered a valid rego either.
         let stake_address = get_stake_address(&rego.metadata.stake_vkey, network_id);
         match stake_address {
-            None => {}
+            None => {
+                // filter_valid_registrations ensures that every valid rego has
+                // a stake key, so if we can't parse the stake key here,
+                // something is wrong with filter_valid_registrations that the
+                // programmer needs to fix.
+                let rego_json = serde_json::to_string_pretty(&rego);
+                panic!("A registration was marked valid but we were unable to parse a valid stake address: {rego_json:?}");
+            }
             Some(stk) => {
                 let voting_power = query_stake_value(&mut client, &stk).unwrap();
                 rego_voting_power.push((rego, voting_power));
@@ -215,6 +221,20 @@ fn filter_valid_registrations(regos: Vec<Rego>) -> Vec<Rego> {
     regos_valid
 }
 
+// A registration is valid iff the following two conditions hold:
+//   - We can parse each of the elements of the registration into their
+//     corresponding types successfully:
+//     - 61284:
+//       - 1: Delegations and their public keys
+//       - 2: Stake public/verification key
+//       - 3: Rewards address
+//       - 4: Slot number
+//       - 5: Purpose, if present
+//     - 61285:
+//       - 1: Ed25519 Signature
+//   - The serialized registration transaction metadata ({ '61284': { ... } }),
+//     when hashed with the Blake2b256 algorithm, successfully verifies under the
+//     public key ('61284' > '2') to match the signature ('61285', '1').
 fn is_valid_rego(rego: &Rego) -> bool {
     // Remove initial '0x' from string
     let stake_vkey_hex_only = rego.metadata.stake_vkey.clone().split_off(2);

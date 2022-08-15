@@ -143,14 +143,14 @@ fn hex_str_to_bytes(hex_str: &String) -> Result<Vec<u8>, hex::FromHexError> {
 // 0b0001 for mainnet OR NetworkInfo::mainnet().network_id()
 // Network magic doesn't matter
 fn get_stake_address(stake_vkey_hex: &String, network_id: u8) -> Option<String> {
-    // Remove initial '0x' from string
-    let stake_vkey_hex_only = stake_vkey_hex.clone().split_off(2);
+    let stake_vkey_bytes = hex_str_to_bytes(stake_vkey_hex).ok()?;
     // TODO support stake extended keys
-    if stake_vkey_hex_only.len() == 128 {
+    if stake_vkey_bytes.len() == 64 {
+        // For the moment, just ignore stake extended keys
         None
     } else {
-        // Convert hex to public key
-        let pub_key = PublicKey::from_bytes(&hex::decode(&stake_vkey_hex_only).unwrap()).unwrap();
+        // Convert bytes to stake public key
+        let pub_key = PublicKey::from_bytes(&stake_vkey_bytes).ok()?;
         let cred = StakeCredential::from_keyhash(&pub_key.hash());
         let cred_bytes = to_bytes(&cred);
         let cred_bytes_hex = hex::encode(&cred_bytes);

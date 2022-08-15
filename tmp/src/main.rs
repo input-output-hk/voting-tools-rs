@@ -43,11 +43,11 @@ struct RegoMetadata {
     #[serde(rename = "4")]
     slot: u64,
     #[serde(rename = "5")]
-    #[serde(default = "catalystPurpose")]
+    #[serde(default = "catalyst_purpose")]
     purpose: u64,
 }
 
-fn catalystPurpose() -> u64 {
+fn catalyst_purpose() -> u64 {
     return 0;
 }
 

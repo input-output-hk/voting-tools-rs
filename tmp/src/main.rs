@@ -102,12 +102,13 @@ struct Output {
 
 fn main() -> Result<(), Error> {
     // Connect to db-sync database
+    // TODO Retrieve DB parameters from command-line
     let mut client = Client::connect(
         "postgresql://cexplorer@cexplorer?host=/var/run/postgresql",
         NoTls,
     )?;
 
-    // TODO parse slot number from command line
+    // TODO Retrieve slot number from command-line
     let regos: Vec<Rego> = query_vote_registrations(&mut client, None)?;
 
     // TODO get network id from cmd line
@@ -120,6 +121,8 @@ fn main() -> Result<(), Error> {
     let mut rego_voting_power = Vec::new();
     mk_stake_snapshot_table(&mut client, None);
     for rego in regos_latest {
+        // TODO if it doesn't have a valid stake address, it shouldn't be
+        // considered a valid rego either.
         let stake_address = get_stake_address(&rego.metadata.stake_vkey, network_id);
         match stake_address {
             None => {}
@@ -143,6 +146,7 @@ fn main() -> Result<(), Error> {
     }
 
     let output_json = serde_json::to_string_pretty(&output).unwrap();
+    // TODO Output to file
     println!("{output_json}");
 
     Ok(())

@@ -1,6 +1,7 @@
 use postgres::{Client, Error, NoTls};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use cardano_serialization_lib::metadata::MetadataList;
 use cardano_serialization_lib::metadata::MetadataMap;
 use cardano_serialization_lib::chain_crypto::Blake2b256;
 use std::collections::HashMap;
@@ -43,12 +44,7 @@ struct RegoMetadata {
     #[serde(rename = "4")]
     slot: u64,
     #[serde(rename = "5")]
-    #[serde(default = "catalyst_purpose")]
-    purpose: u64,
-}
-
-fn catalyst_purpose() -> u64 {
-    return 0;
+    purpose: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -225,6 +221,57 @@ fn filter_valid_registrations(regos: Vec<Rego>) -> Vec<Rego> {
     regos_valid
 }
 
+fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadata> {
+    let pub_key : PublicKey = get_stake_pub_key(&rego.stake_vkey).unwrap();
+
+    // Get rewards address
+    let rewards_addr : Address = Address::from_bytes(hex::decode(&rego.rewards_addr.clone().split_off(2)).unwrap()).unwrap();
+    let m_rewards_stake_addr : Option<RewardAddress> = RewardAddress::from_address(&rewards_addr);
+
+    match m_rewards_stake_addr {
+        None => { None }
+        Some(rewards_stake_addr) => {
+            let mut meta_whole : GeneralTransactionMetadata = GeneralTransactionMetadata::new();
+
+            // Translate registration to Cardano metadata type so we can serialize it correctly
+            let mut meta_map : MetadataMap = MetadataMap::new();
+            let delegations = match rego.delegations.clone() {
+                // TODO test this is serialized the same as Haskell
+                Delegations::Delegated(ds) => {
+                    let mut outer_list = MetadataList::new();
+                    for (k, weight) in ds {
+                        let mut inner_list = MetadataList::new();
+                        let key_bytes = hex::decode(k.clone().split_off(2)).unwrap();
+                        inner_list.add(&TransactionMetadatum::new_bytes(key_bytes).unwrap());
+                        inner_list.add(&TransactionMetadatum::new_int(&Int::new(&BigNum::from(weight))));
+                        outer_list.add(&TransactionMetadatum::new_list(&inner_list));
+                    }
+                    TransactionMetadatum::new_list(&outer_list)
+                },
+                Delegations::Legacy(k) => {
+                    let bytes = hex::decode(k.clone().split_off(2)).unwrap();
+                    TransactionMetadatum::new_bytes(bytes).unwrap()
+                }
+            };
+            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(1)), &delegations);
+            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(2)), &TransactionMetadatum::new_bytes(pub_key.as_bytes()).unwrap());
+            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(3)), &TransactionMetadatum::new_bytes(rewards_addr.to_bytes()).unwrap());
+            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(4)), &TransactionMetadatum::new_int(&Int::new(&BigNum::from(rego.slot))));
+            match rego.purpose {
+                None => {}
+                Some(purpose) => {
+                    meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(5)), &TransactionMetadatum::new_int(&Int::new(&BigNum::from(purpose))));
+                },
+            }
+
+            let mut meta = GeneralTransactionMetadata::new();
+            meta.insert(&BigNum::from(61284 as u32), &TransactionMetadatum::new_map(&meta_map));
+
+            Some(meta)
+        }
+    }
+}
+
 // A registration is valid iff the following two conditions hold:
 //   - We can parse each of the elements of the registration into their
 //     corresponding types successfully:
@@ -240,54 +287,24 @@ fn filter_valid_registrations(regos: Vec<Rego>) -> Vec<Rego> {
 //     when hashed with the Blake2b256 algorithm, successfully verifies under the
 //     public key ('61284' > '2') to match the signature ('61285', '1').
 fn is_valid_rego(rego: &Rego) -> bool {
-    let pub_key : PublicKey = get_stake_pub_key(&rego.metadata.stake_vkey).unwrap();
+    let meta = rego_meta_to_tx_meta(&rego.metadata).unwrap();
+    let meta_bytes = meta.to_bytes();
+    let meta_bytes_hex = hex::encode(&meta_bytes);
+    let meta_bytes_hash = Blake2b256::new(&meta_bytes);
 
-    // Get rewards address
-    let rewards_addr : Address = Address::from_bytes(hex::decode(&rego.metadata.rewards_addr.clone().split_off(2)).unwrap()).unwrap();
-    let m_rewards_stake_addr : Option<RewardAddress> = RewardAddress::from_address(&rewards_addr);
-
-    match m_rewards_stake_addr {
-        None => { false }
-        Some(rewards_stake_addr) => {
-            let mut meta_whole : GeneralTransactionMetadata = GeneralTransactionMetadata::new();
-
-            // Translate registration to Cardano metadata type so we can serialize it correctly
-            let mut meta_map : MetadataMap = MetadataMap::new();
-            let delegations = match rego.metadata.delegations.clone() {
-                // TODO test this is serialized the same as Haskell
-                Delegations::Delegated(ds) => TransactionMetadatum::new_text("foo".to_string()).unwrap(),
-                Delegations::Legacy(k) => {
-                    let bytes = hex::decode(k.clone().split_off(2)).unwrap();
-                    TransactionMetadatum::new_bytes(bytes).unwrap()
-                }
-            };
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(1)), &delegations);
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(2)), &TransactionMetadatum::new_bytes(pub_key.as_bytes()).unwrap());
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(3)), &TransactionMetadatum::new_bytes(rewards_addr.to_bytes()).unwrap());
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(4)), &TransactionMetadatum::new_int(&Int::new(&BigNum::from(rego.metadata.slot))));
-
-            let mut meta = GeneralTransactionMetadata::new();
-            meta.insert(&BigNum::from(61284 as u32), &TransactionMetadatum::new_map(&meta_map));
-
-            let meta_bytes = meta.to_bytes();
-            let meta_bytes_hex = hex::encode(&meta_bytes);
-            let meta_bytes_hash = Blake2b256::new(&meta_bytes);
-
-            // Get signature from rego
-            let sig_str = rego.signature.signature.clone().split_off(2);
-            match Ed25519Signature::from_hex(&sig_str) {
-                Err(e) => { false },
-                Ok(sig) => {
-                    if pub_key.verify(meta_bytes_hash.as_hash_bytes(), &sig) {
-                        true
-                    } else {
-                        false
-                    }
-                }
+    // Get signature from rego
+    let sig_str = rego.signature.signature.clone().split_off(2);
+    match Ed25519Signature::from_hex(&sig_str) {
+        Err(e) => { false },
+        Ok(sig) => {
+            let pub_key : PublicKey = get_stake_pub_key(&rego.metadata.stake_vkey).unwrap();
+            if pub_key.verify(meta_bytes_hash.as_hash_bytes(), &sig) {
+                true
+            } else {
+                false
             }
         }
     }
-
 }
 
 fn filter_latest_registrations(regos: Vec<Rego>) -> Vec<Rego> {

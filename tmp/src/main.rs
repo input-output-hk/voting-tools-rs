@@ -2,7 +2,9 @@ use cardano_serialization_lib::address::{Address, NetworkInfo};
 use cardano_serialization_lib::address::{RewardAddress, StakeCredential};
 use cardano_serialization_lib::chain_crypto::Blake2b256;
 use cardano_serialization_lib::crypto::{Ed25519Signature, PublicKey};
-use cardano_serialization_lib::metadata::{TransactionMetadatum, GeneralTransactionMetadata, MetadataList, MetadataMap};
+use cardano_serialization_lib::metadata::{
+    GeneralTransactionMetadata, MetadataList, MetadataMap, TransactionMetadatum,
+};
 use cardano_serialization_lib::utils::{BigNum, Int};
 use compare::{natural, Compare};
 use hex;
@@ -321,20 +323,24 @@ fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadat
 //     when hashed with the Blake2b256 algorithm, successfully verifies under the
 //     public key ('61284' > '2') to match the signature ('61285', '1').
 fn is_valid_rego(rego: &Rego) -> bool {
-    let meta = rego_meta_to_tx_meta(&rego.metadata).unwrap();
-    let meta_bytes = meta.to_bytes();
-    let meta_bytes_hash = Blake2b256::new(&meta_bytes);
+    match rego_meta_to_tx_meta(&rego.metadata) {
+        None => false,
+        Some(meta) => {
+            let meta_bytes = meta.to_bytes();
+            let meta_bytes_hash = Blake2b256::new(&meta_bytes);
 
-    // Get signature from rego
-    let sig_str = rego.signature.signature.clone().split_off(2);
-    match Ed25519Signature::from_hex(&sig_str) {
-        Err(_e) => false,
-        Ok(sig) => {
-            let pub_key: PublicKey = get_stake_pub_key(&rego.metadata.stake_vkey).unwrap();
-            if pub_key.verify(meta_bytes_hash.as_hash_bytes(), &sig) {
-                true
-            } else {
-                false
+            // Get signature from rego
+            let sig_str = rego.signature.signature.clone().split_off(2);
+            match Ed25519Signature::from_hex(&sig_str) {
+                Err(_e) => false,
+                Ok(sig) => {
+                    let pub_key: PublicKey = get_stake_pub_key(&rego.metadata.stake_vkey).unwrap();
+                    if pub_key.verify(meta_bytes_hash.as_hash_bytes(), &sig) {
+                        true
+                    } else {
+                        false
+                    }
+                }
             }
         }
     }

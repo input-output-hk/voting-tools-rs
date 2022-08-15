@@ -85,12 +85,17 @@ fn main() -> Result<(), Error> {
     // TODO Retrieve slot number from command-line
     let regos: Vec<Rego> = query_vote_registrations(&mut client, None)?;
 
-    // TODO get network id from cmd line
-    let network_id = NetworkInfo::mainnet().network_id();
-
-    let regos_valid: Vec<Rego> = filter_valid_registrations(regos, network_id);
+    // Registrations are valid if their signature verifies correctly.
+    let regos_valid: Vec<Rego> = filter_valid_registrations(regos);
 
     let regos_latest: Vec<Rego> = filter_latest_registrations(regos_valid);
+
+    // TODO Retrieve network id from command-line
+    // NOTE We need the mainnet/testnet bit to construct a stake address from
+    // the stake public key embedded in a registration transaction. We don't
+    // need the protocol magic, just the mainnet/testnet bit.
+    // The constructed stake address is then queried for funds.
+    let network_id = NetworkInfo::mainnet().network_id();
 
     let mut rego_voting_power = Vec::new();
     mk_stake_snapshot_table(&mut client, None);
@@ -188,19 +193,17 @@ fn query_vote_registrations(
     Ok(regos)
 }
 
-
-
-fn filter_valid_registrations(regos: Vec<Rego>, network_id: u8) -> Vec<Rego> {
+fn filter_valid_registrations(regos: Vec<Rego>) -> Vec<Rego> {
     let mut regos_valid = Vec::new();
 
     for rego in regos {
-        if mk_meta(&rego) { regos_valid.push(rego) } else { }
+        if is_valid_rego(&rego) { regos_valid.push(rego) } else { }
     }
 
     regos_valid
 }
 
-fn mk_meta(rego: &Rego) -> bool {
+fn is_valid_rego(rego: &Rego) -> bool {
     // Remove initial '0x' from string
     let stake_vkey_hex_only = rego.metadata.stake_vkey.clone().split_off(2);
     if stake_vkey_hex_only.len() == 128 { false } else {

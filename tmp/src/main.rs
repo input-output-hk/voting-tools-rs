@@ -1,17 +1,14 @@
 use cardano_serialization_lib::address::{Address, NetworkInfo};
 use cardano_serialization_lib::address::{RewardAddress, StakeCredential};
-use cardano_serialization_lib::chain_crypto;
 use cardano_serialization_lib::chain_crypto::Blake2b256;
-use cardano_serialization_lib::crypto::{Ed25519KeyHash, Ed25519Signature, PublicKey};
+use cardano_serialization_lib::crypto::{Ed25519Signature, PublicKey};
 use cardano_serialization_lib::metadata::{TransactionMetadatum, GeneralTransactionMetadata, MetadataList, MetadataMap};
-use cardano_serialization_lib::utils::{to_bytes, BigNum, Int};
-use chain_core::property::FromStr;
+use cardano_serialization_lib::utils::{BigNum, Int};
 use compare::{natural, Compare};
 use hex;
 use postgres::{Client, Error, NoTls};
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::cmp::Ordering::{Equal, Greater, Less};
 use std::collections::HashMap;
 
@@ -88,7 +85,7 @@ fn main() -> Result<(), Error> {
     let mut rego_voting_power = Vec::new();
     // As an optimization, we create a UTxO snapshot table, paying an upfront
     // cost to make subsequent queries more efficient.
-    mk_stake_snapshot_table(&mut client, None);
+    mk_stake_snapshot_table(&mut client, None).unwrap();
     for rego in regos_latest {
         let stake_address = get_stake_address(&rego.metadata.stake_vkey, network_id);
         match stake_address {
@@ -125,6 +122,34 @@ fn main() -> Result<(), Error> {
 
     Ok(())
 }
+
+// fn main() {
+//     let data = r#"
+//         {
+//           "1": [
+//             [
+//               "0x9fe97adba54d4e0aee079dbf1dc489c8c3ba310da6deb2b59aae202234842bf8",
+//               1
+//             ],
+//             [
+//               "0x4328ff5dcb946eadbe5b6cff7b7c990075827d304c01bba23186bcbb9bd80d8f",
+//               2
+//             ]
+//           ],
+//           "2": "0x96e1699d655dce2b62541f675055ee5133c6cd4b6639eff647160974fd5ae5e7",
+//           "3": "0xe17359eaa7117817f31ab78e64e91c4bda80bf4f30bee7a6811ef6bf57",
+//           "4": 430,
+//           "5": 0
+//         }"#;
+
+//     // Parse the string of data into serde_json::Value.
+//     let v: RegoMetadata = serde_json::from_str(data).unwrap();
+
+//     let meta = rego_meta_to_tx_meta(&v).unwrap();
+//     let meta_bytes = meta.to_bytes();
+//     let meta_bytes_hex = hex::encode(&meta_bytes);
+//     println!("{meta_bytes_hex}");
+// }
 
 // Take a hexidecimal (hex) string and convert it to bytes. If it has a prefix
 // of "0x", as the registration hex strings do, remove the prefix before
@@ -222,9 +247,7 @@ fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadat
 
     match m_rewards_stake_addr {
         None => None,
-        Some(rewards_stake_addr) => {
-            let mut meta_whole: GeneralTransactionMetadata = GeneralTransactionMetadata::new();
-
+        Some(_rewards_stake_addr) => {
             // Translate registration to Cardano metadata type so we can serialize it correctly
             let mut meta_map: MetadataMap = MetadataMap::new();
             let delegations = match rego.delegations.clone() {
@@ -300,13 +323,12 @@ fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadat
 fn is_valid_rego(rego: &Rego) -> bool {
     let meta = rego_meta_to_tx_meta(&rego.metadata).unwrap();
     let meta_bytes = meta.to_bytes();
-    let meta_bytes_hex = hex::encode(&meta_bytes);
     let meta_bytes_hash = Blake2b256::new(&meta_bytes);
 
     // Get signature from rego
     let sig_str = rego.signature.signature.clone().split_off(2);
     match Ed25519Signature::from_hex(&sig_str) {
-        Err(e) => false,
+        Err(_e) => false,
         Ok(sig) => {
             let pub_key: PublicKey = get_stake_pub_key(&rego.metadata.stake_vkey).unwrap();
             if pub_key.verify(meta_bytes_hash.as_hash_bytes(), &sig) {

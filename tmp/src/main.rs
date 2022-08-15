@@ -236,7 +236,6 @@ fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadat
             // Translate registration to Cardano metadata type so we can serialize it correctly
             let mut meta_map : MetadataMap = MetadataMap::new();
             let delegations = match rego.delegations.clone() {
-                // TODO test this is serialized the same as Haskell
                 Delegations::Delegated(ds) => {
                     let mut outer_list = MetadataList::new();
                     for (k, weight) in ds {

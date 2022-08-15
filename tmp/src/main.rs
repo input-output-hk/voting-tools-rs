@@ -240,7 +240,7 @@ fn filter_valid_registrations(regos: Vec<Rego>) -> Vec<Rego> {
 }
 
 fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadata> {
-    let pub_key: PublicKey = get_stake_pub_key(&rego.stake_vkey).unwrap();
+    let pub_key: PublicKey = get_stake_pub_key(&rego.stake_vkey)?;
 
     // Get rewards address
     let rewards_addr: Address =

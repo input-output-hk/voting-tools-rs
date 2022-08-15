@@ -1,28 +1,19 @@
+use cardano_serialization_lib::address::{Address, NetworkInfo};
+use cardano_serialization_lib::address::{RewardAddress, StakeCredential};
+use cardano_serialization_lib::chain_crypto;
+use cardano_serialization_lib::chain_crypto::Blake2b256;
+use cardano_serialization_lib::crypto::{Ed25519KeyHash, Ed25519Signature, PublicKey};
+use cardano_serialization_lib::metadata::{TransactionMetadatum, GeneralTransactionMetadata, MetadataList, MetadataMap};
+use cardano_serialization_lib::utils::{to_bytes, BigNum, Int};
+use chain_core::property::FromStr;
+use compare::{natural, Compare};
+use hex;
 use postgres::{Client, Error, NoTls};
+use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use cardano_serialization_lib::metadata::MetadataList;
-use cardano_serialization_lib::metadata::MetadataMap;
-use cardano_serialization_lib::chain_crypto::Blake2b256;
+use std::cmp::Ordering::{Equal, Greater, Less};
 use std::collections::HashMap;
-use cardano_serialization_lib::address::NetworkInfo;
-use cardano_serialization_lib::utils::BigNum;
-use cardano_serialization_lib::address::Address;
-use cardano_serialization_lib::utils::Int;
-use cardano_serialization_lib::crypto::Ed25519Signature;
-use cardano_serialization_lib::chain_crypto;
-use cardano_serialization_lib::address::{RewardAddress, StakeCredential};
-use cardano_serialization_lib::crypto::Ed25519KeyHash;
-use cardano_serialization_lib::crypto::PublicKey;
-use cardano_serialization_lib::utils::to_bytes;
-use chain_core::property::FromStr;
-use hex;
-use rust_decimal::prelude::*;
-use compare::{Compare, natural};
-use std::cmp::Ordering::{Less, Equal, Greater};
-use cardano_serialization_lib::metadata::TransactionMetadatum;
-use cardano_serialization_lib::metadata::GeneralTransactionMetadata;
-
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]

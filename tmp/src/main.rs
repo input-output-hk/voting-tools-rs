@@ -23,8 +23,7 @@ enum Delegations {
     Delegated(Vec<(String, u32)>),
 }
 
-#[derive(Serialize, Deserialize)]
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct RegoMetadata {
     #[serde(rename = "1")]
     delegations: Delegations,
@@ -38,15 +37,13 @@ struct RegoMetadata {
     purpose: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize)]
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct RegoSignature {
     #[serde(rename = "1")]
     signature: String,
 }
 
-#[derive(Serialize, Deserialize)]
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Rego {
     tx_id: i64,
     metadata: RegoMetadata,
@@ -158,7 +155,7 @@ fn get_stake_address(stake_vkey_hex: &String, network_id: u8) -> Option<Address>
     let cred = StakeCredential::from_keyhash(&pub_key.hash());
     // Converting from a RewardAddress to an Address is necessary to get the
     // correct serialization format.
-    let stake_addr : Address = RewardAddress::new(network_id, &cred).to_address();
+    let stake_addr: Address = RewardAddress::new(network_id, &cred).to_address();
     Some(stake_addr)
 }
 
@@ -206,26 +203,30 @@ fn filter_valid_registrations(regos: Vec<Rego>) -> Vec<Rego> {
     let mut regos_valid = Vec::new();
 
     for rego in regos {
-        if is_valid_rego(&rego) { regos_valid.push(rego) } else { }
+        if is_valid_rego(&rego) {
+            regos_valid.push(rego)
+        } else {
+        }
     }
 
     regos_valid
 }
 
 fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadata> {
-    let pub_key : PublicKey = get_stake_pub_key(&rego.stake_vkey).unwrap();
+    let pub_key: PublicKey = get_stake_pub_key(&rego.stake_vkey).unwrap();
 
     // Get rewards address
-    let rewards_addr : Address = Address::from_bytes(hex::decode(&rego.rewards_addr.clone().split_off(2)).unwrap()).unwrap();
-    let m_rewards_stake_addr : Option<RewardAddress> = RewardAddress::from_address(&rewards_addr);
+    let rewards_addr: Address =
+        Address::from_bytes(hex::decode(&rego.rewards_addr.clone().split_off(2)).unwrap()).unwrap();
+    let m_rewards_stake_addr: Option<RewardAddress> = RewardAddress::from_address(&rewards_addr);
 
     match m_rewards_stake_addr {
-        None => { None }
+        None => None,
         Some(rewards_stake_addr) => {
-            let mut meta_whole : GeneralTransactionMetadata = GeneralTransactionMetadata::new();
+            let mut meta_whole: GeneralTransactionMetadata = GeneralTransactionMetadata::new();
 
             // Translate registration to Cardano metadata type so we can serialize it correctly
-            let mut meta_map : MetadataMap = MetadataMap::new();
+            let mut meta_map: MetadataMap = MetadataMap::new();
             let delegations = match rego.delegations.clone() {
                 Delegations::Delegated(ds) => {
                     let mut outer_list = MetadataList::new();
@@ -233,29 +234,49 @@ fn rego_meta_to_tx_meta(rego: &RegoMetadata) -> Option<GeneralTransactionMetadat
                         let mut inner_list = MetadataList::new();
                         let key_bytes = hex::decode(k.clone().split_off(2)).unwrap();
                         inner_list.add(&TransactionMetadatum::new_bytes(key_bytes).unwrap());
-                        inner_list.add(&TransactionMetadatum::new_int(&Int::new(&BigNum::from(weight))));
+                        inner_list.add(&TransactionMetadatum::new_int(&Int::new(&BigNum::from(
+                            weight,
+                        ))));
                         outer_list.add(&TransactionMetadatum::new_list(&inner_list));
                     }
                     TransactionMetadatum::new_list(&outer_list)
-                },
+                }
                 Delegations::Legacy(k) => {
                     let bytes = hex::decode(k.clone().split_off(2)).unwrap();
                     TransactionMetadatum::new_bytes(bytes).unwrap()
                 }
             };
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(1)), &delegations);
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(2)), &TransactionMetadatum::new_bytes(pub_key.as_bytes()).unwrap());
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(3)), &TransactionMetadatum::new_bytes(rewards_addr.to_bytes()).unwrap());
-            meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(4)), &TransactionMetadatum::new_int(&Int::new(&BigNum::from(rego.slot))));
+            meta_map.insert(
+                &TransactionMetadatum::new_int(&Int::new_i32(1)),
+                &delegations,
+            );
+            meta_map.insert(
+                &TransactionMetadatum::new_int(&Int::new_i32(2)),
+                &TransactionMetadatum::new_bytes(pub_key.as_bytes()).unwrap(),
+            );
+            meta_map.insert(
+                &TransactionMetadatum::new_int(&Int::new_i32(3)),
+                &TransactionMetadatum::new_bytes(rewards_addr.to_bytes()).unwrap(),
+            );
+            meta_map.insert(
+                &TransactionMetadatum::new_int(&Int::new_i32(4)),
+                &TransactionMetadatum::new_int(&Int::new(&BigNum::from(rego.slot))),
+            );
             match rego.purpose {
                 None => {}
                 Some(purpose) => {
-                    meta_map.insert(&TransactionMetadatum::new_int(&Int::new_i32(5)), &TransactionMetadatum::new_int(&Int::new(&BigNum::from(purpose))));
-                },
+                    meta_map.insert(
+                        &TransactionMetadatum::new_int(&Int::new_i32(5)),
+                        &TransactionMetadatum::new_int(&Int::new(&BigNum::from(purpose))),
+                    );
+                }
             }
 
             let mut meta = GeneralTransactionMetadata::new();
-            meta.insert(&BigNum::from(61284 as u32), &TransactionMetadatum::new_map(&meta_map));
+            meta.insert(
+                &BigNum::from(61284 as u32),
+                &TransactionMetadatum::new_map(&meta_map),
+            );
 
             Some(meta)
         }
@@ -285,9 +306,9 @@ fn is_valid_rego(rego: &Rego) -> bool {
     // Get signature from rego
     let sig_str = rego.signature.signature.clone().split_off(2);
     match Ed25519Signature::from_hex(&sig_str) {
-        Err(e) => { false },
+        Err(e) => false,
         Ok(sig) => {
-            let pub_key : PublicKey = get_stake_pub_key(&rego.metadata.stake_vkey).unwrap();
+            let pub_key: PublicKey = get_stake_pub_key(&rego.metadata.stake_vkey).unwrap();
             if pub_key.verify(meta_bytes_hash.as_hash_bytes(), &sig) {
                 true
             } else {
@@ -308,17 +329,25 @@ fn filter_latest_registrations(regos: Vec<Rego>) -> Vec<Rego> {
     // lowest txid.
     let mut latest_regos = Vec::new();
     for (_, stake_regos) in m {
-        let latest = stake_regos.iter().fold(stake_regos[0].clone(), |acc, rego| {
-            let cmp = natural();
-            match cmp.compare(&rego.metadata.slot, &acc.metadata.slot) {
-                // If the slot number is less, it's not a newer registration.
-                Less => acc,
-                // If the slot number is greater, it's a newer registration.
-                Greater => rego.clone(),
-                // If the slot number is equal, choose the one with the lower tx id.
-                Equal => if rego.tx_id < acc.tx_id { rego.clone() } else { acc },
-            }
-        });
+        let latest = stake_regos
+            .iter()
+            .fold(stake_regos[0].clone(), |acc, rego| {
+                let cmp = natural();
+                match cmp.compare(&rego.metadata.slot, &acc.metadata.slot) {
+                    // If the slot number is less, it's not a newer registration.
+                    Less => acc,
+                    // If the slot number is greater, it's a newer registration.
+                    Greater => rego.clone(),
+                    // If the slot number is equal, choose the one with the lower tx id.
+                    Equal => {
+                        if rego.tx_id < acc.tx_id {
+                            rego.clone()
+                        } else {
+                            acc
+                        }
+                    }
+                }
+            });
         latest_regos.push(latest.clone())
     }
     latest_regos
@@ -392,7 +421,7 @@ fn query_stake_value(client: &mut Client, stake_address: &Address) -> Result<u64
 fn query_stake_values(
     client: &mut Client,
     m_slot_no: Option<u64>,
-    stake_addresses: Vec<Address>
+    stake_addresses: Vec<Address>,
 ) -> Result<Vec<(Address, u64)>, Error> {
     mk_stake_snapshot_table(client, m_slot_no)?;
 

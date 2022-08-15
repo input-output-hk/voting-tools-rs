@@ -153,7 +153,7 @@ fn hex_str_to_bytes(hex_str: &String) -> Result<Vec<u8>, hex::FromHexError> {
 // 0b0000 for testnet OR NetworkInfo::testnet().network_id()
 // 0b0001 for mainnet OR NetworkInfo::mainnet().network_id()
 // Network magic doesn't matter
-fn get_stake_address(stake_vkey_hex: &String, network_id: u8) -> Option<String> {
+fn get_stake_address(stake_vkey_hex: &String, network_id: u8) -> Option<Address> {
     let stake_vkey_bytes = hex_str_to_bytes(stake_vkey_hex).ok()?;
     // TODO support stake extended keys
     if stake_vkey_bytes.len() == 64 {
@@ -166,8 +166,7 @@ fn get_stake_address(stake_vkey_hex: &String, network_id: u8) -> Option<String> 
         // Converting from a RewardAddress to an Address is necessary to get the
         // correct serialization format.
         let stake_addr : Address = RewardAddress::new(network_id, &cred).to_address();
-        let stake_addr_hex = hex::encode(&stake_addr.to_bytes());
-        Some(stake_addr_hex)
+        Some(stake_addr)
     }
 }
 
@@ -361,7 +360,8 @@ fn mk_stake_snapshot_table(client: &mut Client, m_slot_no: Option<u64>) -> Resul
 }
 
 // Precondition: mk_stake_snapshot_table has been run:
-fn query_stake_value(client: &mut Client, stake_address_hex: &String) -> Result<u64, Error> {
+fn query_stake_value(client: &mut Client, stake_address: &Address) -> Result<u64, Error> {
+    let stake_address_hex = hex::encode(&stake_address.to_bytes());
     let stake_query_sql = format!("SELECT utxo_snapshot.value FROM utxo_snapshot WHERE stake_credential = decode('{stake_address_hex}', 'hex');");
     // Don't do SUM in the query, lovelace is a bounded integer type defined by
     // cardano-db-sync, unless you perform a conversion to an unbounded type,
@@ -382,14 +382,14 @@ fn query_stake_value(client: &mut Client, stake_address_hex: &String) -> Result<
 fn query_stake_values(
     client: &mut Client,
     m_slot_no: Option<u64>,
-    stake_addresses_hex: Vec<String>,
-) -> Result<Vec<(String, u64)>, Error> {
+    stake_addresses: Vec<Address>
+) -> Result<Vec<(Address, u64)>, Error> {
     mk_stake_snapshot_table(client, m_slot_no)?;
 
     let mut stake_values = Vec::new();
-    for stake_address_hex in stake_addresses_hex {
-        let value = query_stake_value(client, &stake_address_hex)?;
-        stake_values.push((stake_address_hex, value));
+    for stake_address in stake_addresses {
+        let value = query_stake_value(client, &stake_address)?;
+        stake_values.push((stake_address, value));
     }
     Ok(stake_values)
 }

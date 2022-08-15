@@ -131,6 +131,14 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
+// Take a hexidecimal (hex) string and convert it to bytes. If it has a prefix
+// of "0x", as the registration hex strings do, remove the prefix before
+// converting to bytes.
+fn hex_str_to_bytes(hex_str: &String) -> Result<Vec<u8>, hex::FromHexError> {
+    let hex_str_normalized = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+    hex::decode(hex_str_normalized)
+}
+
 // 0b0000 for testnet OR NetworkInfo::testnet().network_id()
 // 0b0001 for mainnet OR NetworkInfo::mainnet().network_id()
 // Network magic doesn't matter

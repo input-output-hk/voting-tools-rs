@@ -88,6 +88,9 @@ fn main() -> Result<(), Error> {
     // Registrations are valid if their signature verifies correctly.
     let regos_valid: Vec<Rego> = filter_valid_registrations(regos);
 
+    // The latest registration is the registration with the highest slot number
+    // and lowest transaction id.
+    // (i.e. the first registration with the highest slot number).
     let regos_latest: Vec<Rego> = filter_latest_registrations(regos_valid);
 
     // TODO Retrieve network id from command-line
@@ -98,6 +101,8 @@ fn main() -> Result<(), Error> {
     let network_id = NetworkInfo::mainnet().network_id();
 
     let mut rego_voting_power = Vec::new();
+    // As an optimization, we create a UTxO snapshot table, paying an upfront
+    // cost to make subsequent queries more efficient.
     mk_stake_snapshot_table(&mut client, None);
     for rego in regos_latest {
         // TODO if it doesn't have a valid stake address, it shouldn't be

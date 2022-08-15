@@ -152,12 +152,11 @@ fn get_stake_address(stake_vkey_hex: &String, network_id: u8) -> Option<String> 
         // Convert bytes to stake public key
         let pub_key = PublicKey::from_bytes(&stake_vkey_bytes).ok()?;
         let cred = StakeCredential::from_keyhash(&pub_key.hash());
-        let cred_bytes = to_bytes(&cred);
-        let cred_bytes_hex = hex::encode(&cred_bytes);
+        // Converting from a RewardAddress to an Address is necessary to get the
+        // correct serialization format.
         let stake_addr : Address = RewardAddress::new(network_id, &cred).to_address();
-        let stake_addr_bytes = stake_addr.to_bytes();
-        let stake_addr_bytes_hex = hex::encode(&stake_addr_bytes);
-        Some(stake_addr_bytes_hex)
+        let stake_addr_hex = hex::encode(&stake_addr.to_bytes());
+        Some(stake_addr_hex)
     }
 }
 
